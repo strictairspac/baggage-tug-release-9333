@@ -4,10 +4,11 @@ from src.config.resources import engine
 from src.constants.job_state import JobState
 from src.controllers.access import identity, reviewer
 from src.controllers.workbench import new_review
+from src.domain import scenario
 from src.schemas.reviews import ReviewEntry, ReviewInput
-from src.schemas.runs import RunEntry
-from src.services import reviews, runs
-from src.utils.serial import canonical_json
+from src.schemas.runs import RecheckEntry, RunEntry
+from src.services import archives, cases, reviews, runs
+from src.utils.serial import canonical_json, content_digest
 
 router = APIRouter(prefix="/runs", tags=["Execution"])
 
@@ -46,3 +47,26 @@ def export(run_id: int):
     return Response(canonical_json(run), media_type="application/json", headers={
         "Content-Disposition": f"attachment; filename=evidence-{run_id}.json",
     })
+
+
+@router.get("/{run_id}/recheck", response_model=RecheckEntry, dependencies=[Depends(identity)])
+def recheck(run_id: int):
+    with engine.begin() as db:
+        run = runs.get(db, run_id)
+        if run["status"] != JobState.DONE:
+            raise HTTPException(409, "批次执行成功后才能复算")
+        source = "archive" if archives.is_tombstone(cases.get(db, run["case_id"])["payload"]) else "live"
+        try:
+            payload = archives.resolve_payload(db, run["case_id"])
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        recomputed = scenario.run(payload, run["parameter"], db)
+        return {
+            "run_id": run["id"],
+            "parameter": run["parameter"],
+            "source": source,
+            "matched": content_digest(recomputed) == run["digest"],
+            "digest": run["digest"],
+            "recomputed_digest": content_digest(recomputed),
+            "result": recomputed,
+        }

@@ -53,7 +53,9 @@ export async function casesPage(config, user, route) {
     el("div", {class: "split case-split"},
       section(selected ? selected.title : "等待选择资料", selected ?
         [el("p", {}, selected.description), operator ? queueForm(config, selected) : empty("当前账号可查看此资料。"),
-          el("details", {}, el("summary", {}, "查看业务数据"), el("pre", {}, JSON.stringify(selected.payload, null, 2)))] :
+          selected.payload?.archived ?
+            el("p", {class: "empty"}, "检证原件已归档清理，历史批次可在交接单页下载与复算。") :
+            el("details", {}, el("summary", {}, "查看业务数据"), el("pre", {}, JSON.stringify(selected.payload, null, 2)))] :
         empty("先登记一条资料，再提交执行。")),
       operator ? section("登记新资料", registration(config, selected)) : null));
 }

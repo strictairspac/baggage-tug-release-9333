@@ -6,6 +6,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.config.resources import cache, engine
+from src.services.archives import ArchiveFailure
+from src.services.archives import fail as fail_archive
+from src.services.archives import service_one as archive_one
 from src.services.execution import JobFailure, fail, service_one
 
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +32,13 @@ def work():
             except JobFailure as exc:
                 logger.exception("Execution %s failed", exc.run_id)
                 fail(exc)
+                continue
+            try:
+                if archive_one():
+                    continue
+            except ArchiveFailure as exc:
+                logger.exception("Archive %s failed", exc.case_id)
+                fail_archive(exc)
                 continue
             cache.blpop("workbench:wake", timeout=1)
         except (RedisError, SQLAlchemyError):

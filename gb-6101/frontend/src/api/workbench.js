@@ -11,5 +11,8 @@ export const api = {
   review: id => request(`/runs/${id}/review`),
   submitReview: (id, data) => request(`/runs/${id}/review`, {method: "POST", data}),
   export: id => request(`/runs/${id}/export`, {raw: true}),
+  recheck: id => request(`/runs/${id}/recheck`),
+  archive: caseId => request(`/cases/${caseId}/archive`),
+  startArchive: caseId => request(`/cases/${caseId}/archive`, {method: "POST"}),
   audit: () => request("/audit", {signal: AbortSignal.timeout(5000)}),
 };

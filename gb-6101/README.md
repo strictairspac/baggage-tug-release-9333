@@ -17,6 +17,8 @@ PostgreSQL 嵌套 NOT EXISTS 对全套必检证据做关系除法。
 
 按车型找全部必检项目，再找每项最新证据。仅包含复核分钟之前及当分钟，按检测分钟及证据序号降序取首条，通过且失效分钟严格大于复核分钟才有效。车型无必检配置时挂起。默认 YP-T12 放行，其余三辆停放。SQL 在独立的 PostgreSQL 会话暂存表上执行，结果回写交接批次。班内口径按当日分钟表达，不跨日，也不直接下发调度放行指令。
 
+结班后复核员在「缺项交接单」按资料批次发起归档。worker 依次完成写入归档、原件对账、清理日常库三个落库步骤：归档副本写入共享产物目录，对账逐批次按原复核时点复算并比对摘要，全部通过后才把资料原件置为归档标记。任一步骤中断都保留已落库进度，重试从断点继续且不重复归档；清理后历史交接单仍可下载，并可在交接单页复算核对到相同的采信回执与放行判定。归档期间新筛查照常受理，执行时自动取用同一份完整资料。
+
 ## 启动
 
 ```sh
@@ -36,7 +38,7 @@ docker compose up -d --build --wait
 | 登录名 | 角色 | 可执行操作 |
 |---|---|---|
 | operator | 资料操作员 | 登记业务资料、设置「复核时点（当日分钟）」、提交、查看和下载结果 |
-| reviewer | 业务复核员 | 查看执行证据、签署单次复核、下载交接单 |
+| reviewer | 业务复核员 | 查看执行证据、签署单次复核、按资料批次发起归档、下载交接单 |
 | viewer | 只读观察员 | 查看资料、执行结果及审计，下载证据 |
 
 选用「YP-1124-早班」对应的演示资料，保存一份复演资料，再以默认参数 480 提交。worker 保存结果摘要、业务明细和 SHA-256。复核员登录后在「缺项交接单」签署。
@@ -53,6 +55,8 @@ docker compose up -d --build --wait
 从 `backend/src/domain/scenario.py` 修改业务入口和演示口径，运行 `docker compose up -d --build --wait` 查看变更。数据库表结构在 `backend/src/models` 和 `backend/migrations`，输入模型在 `backend/src/schemas`。业务页和请求接口在 `frontend/src/pages`、`frontend/src/api`。资料、执行、复核三个工作流实体各有独立表和 API；场景输入及结果保留在所属资料和批次中。
 
 角色枚举在 `backend/src/constants/roles.py`、`frontend/src/constants/roles.js`，用于服务端访问控制、账号初始化、前端导航与签署。批次状态在 `backend/src/constants/job_state.py`、`frontend/src/constants/states.js`，用于队列、状态 API、状态标记与轮询。登记、提交、完成和签署事件写入审计表。
+
+归档任务在同一文件登记 `queued → archived → reconciled → done/failed` 状态机，每个批次一行、按主键去重。归档副本以 `archive/case-<编号>.json` 形式原子写入共享产物目录（`WORKBENCH_DATA_DIR`，默认 `/var/lib/workbench`），数据库记录其 SHA-256 与条目数作为对账依据。清理只把 `cases.payload` 置为归档标记，执行与复算经 `resolve_payload` 自动回退到校验过的归档副本。发起、完成与失败事件同样写入审计表。
 
 `COMPOSE_PROJECT_NAME` 设置栈名，`FRONTEND_PORT`、`BACKEND_PORT`、`DB_PORT` 设置端口。通过 `DB_PASSWORD`、`JWT_SECRET`、`DEMO_PASSWORD` 配置本地凭据。设置 `SEED_DEMO=false` 可关闭演示数据载入，此时数据库初始没有演示账号。数据库密码调整后，已有数据卷需在数据库内同步修改用户密码。
 

@@ -18,3 +18,13 @@ class RunEntry(BaseModel):
     result: dict | None
     failure: str | None
     digest: str | None
+
+
+class RecheckEntry(BaseModel):
+    run_id: int
+    parameter: int
+    source: str
+    matched: bool
+    digest: str | None
+    recomputed_digest: str
+    result: dict

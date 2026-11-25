@@ -6,8 +6,8 @@ from sqlalchemy import select, update
 from src.config.resources import engine
 from src.constants.job_state import JobState
 from src.domain import scenario
-from src.models.cases import cases
 from src.models.runs import runs
+from src.services.archives import resolve_payload
 from src.services.audit import record
 from src.utils.serial import content_digest
 
@@ -23,8 +23,8 @@ def service_one():
         task = db.execute(statement).mappings().first()
         if task is None:
             return False
-        payload = db.scalar(select(cases.c.payload).where(cases.c.id == task["case_id"]))
         try:
+            payload = resolve_payload(db, task["case_id"])
             result = scenario.run(payload, task["parameter"], db)
             output = {"status": JobState.DONE, "result": result, "digest": content_digest(result)}
         except Exception as exc:
